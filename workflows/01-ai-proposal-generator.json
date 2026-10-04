@@ -1,0 +1,277 @@
+{
+  "name": "AI proposal generator (form → Claude → email)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "New proposal",
+        "formDescription": "Fill this in and a draft lands in your inbox in about a minute.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Your company",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Client name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Project scope",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Budget"
+            },
+            {
+              "fieldLabel": "Deadline"
+            },
+            {
+              "fieldLabel": "Anything else",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "Send draft to",
+              "fieldType": "email",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e3457cab-b2fa-416d-aca4-fcfb65ba4d8b",
+      "name": "Proposal request",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "194a891e-b554-4474-a7ce-98da90d51acf"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json['Project scope'].length }}",
+              "rightValue": 40,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7054e499-bbcb-4539-8f0c-343f787685a3",
+      "name": "Validate input",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=You write client proposals for {{ $('Proposal request').item.json['Your company'] }}.\nWrite a proposal draft from the details below. Follow this layout exactly, keep every heading, and do not add sections:\n\n1. Summary (3 sentences: what the client needs, what we will deliver, why us)\n2. Scope (bullet list of concrete deliverables)\n3. Timeline (phases with durations)\n4. Investment (use the budget given; if none, write \"to be agreed\")\n5. Next step (one sentence with a clear call to action)\n\nTone: direct, confident, no filler. Plain text only, no markdown symbols.\n\nClient: {{ $('Proposal request').item.json['Client name'] }}\nProject: {{ $('Proposal request').item.json['Project scope'] }}\nBudget: {{ $('Proposal request').item.json['Budget'] }}\nDeadline: {{ $('Proposal request').item.json['Deadline'] }}\nNotes: {{ $('Proposal request').item.json['Anything else'] }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1200,
+          "temperature": 0.4
+        }
+      },
+      "id": "2ce2b6b4-c79b-468c-a291-8764b6ff067b",
+      "name": "Draft with Claude",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        520,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "proposal",
+              "value": "={{ $json.content[0].text.trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "client",
+              "value": "={{ $('Proposal request').item.json['Client name'] }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "to",
+              "value": "={{ $('Proposal request').item.json['Send draft to'] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a4354e1-59ca-49b3-9d33-3679be0d916a",
+      "name": "Clean up",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        780,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "=Proposal draft: {{ $json.client }}",
+        "emailType": "text",
+        "message": "={{ $json.proposal }}",
+        "options": {}
+      },
+      "id": "24b50a7c-9be7-485c-a214-74455eeac74a",
+      "name": "Email the draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1040,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Draft sent",
+        "completionMessage": "=Check {{ $json.to }}. You can copy and edit the text from the email.",
+        "options": {}
+      },
+      "id": "352fbb9e-2419-48d6-9fdd-238060cea5e5",
+      "name": "Show it on screen",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Need more detail",
+        "completionMessage": "Describe the project scope in at least two sentences so the draft is worth reading.",
+        "options": {}
+      },
+      "id": "0d52d126-ec89-4727-811e-eda6f7012d44",
+      "name": "Too short",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        520,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Proposal request": {
+      "main": [
+        [
+          {
+            "node": "Validate input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate input": {
+      "main": [
+        [
+          {
+            "node": "Draft with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Too short",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft with Claude": {
+      "main": [
+        [
+          {
+            "node": "Clean up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean up": {
+      "main": [
+        [
+          {
+            "node": "Email the draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email the draft": {
+      "main": [
+        [
+          {
+            "node": "Show it on screen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "ai"
+    },
+    {
+      "name": "sales"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
