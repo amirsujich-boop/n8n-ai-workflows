@@ -1,0 +1,388 @@
+{
+  "name": "Lead → score → CRM → follow-up",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "9996313a-507d-4bd1-b8c1-63a2e4894946",
+      "name": "Website form",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "f2ab4f2d-8867-4c3f-b365-d4f9736bf7b6"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "name",
+              "value": "={{ ($json.body.name || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "email",
+              "value": "={{ ($json.body.email || '').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "company",
+              "value": "={{ $json.body.company || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "website",
+              "value": "={{ $json.body.website || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "message",
+              "value": "={{ $json.body.message || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "s6",
+              "name": "source",
+              "value": "={{ $json.body.source || 'website' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "60880124-6d7d-4a0e-97a4-0f6d4b419274",
+      "name": "Normalise",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=Score this inbound lead for a B2B service business. Reply with JSON only:\n{\"score\": 1-10, \"reason\": \"one sentence\", \"first_reply\": \"a short, specific first reply in the lead's language that asks one qualifying question\"}\n\nScoring guide: 8-10 clear need + budget or company size mentioned; 5-7 real need, details missing; 1-4 vague, student, or unrelated.\n\nName: {{ $json.name }}\nCompany: {{ $json.company }}\nWebsite: {{ $json.website }}\nMessage: {{ $json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0
+        }
+      },
+      "id": "d166fa69-f12a-4ffe-8523-8acd741fc5cb",
+      "name": "Score with Claude",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.content[0].text;\nconst s = raw.indexOf('{'), e = raw.lastIndexOf('}');\nlet ai = { score: 5, reason: 'unparsed', first_reply: '' };\ntry { ai = JSON.parse(raw.slice(s, e + 1)); } catch {}\nconst lead = $('Normalise').first().json;\nreturn [{ json: { ...lead, score: Number(ai.score) || 5, reason: ai.reason, first_reply: ai.first_reply, received_at: new Date().toISOString() } }];"
+      },
+      "id": "48f762d9-32be-4d91-829a-3b39c6496a56",
+      "name": "Merge score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "firstName": "={{ $json.name.split(' ')[0] }}",
+          "lastName": "={{ $json.name.split(' ').slice(1).join(' ') }}",
+          "companyName": "={{ $json.company }}",
+          "website": "={{ $json.website }}",
+          "message": "={{ $json.message }}"
+        },
+        "options": {}
+      },
+      "id": "89117e00-30a2-46cb-a177-96e67686938e",
+      "name": "Upsert in HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "545455f2-537e-4b0c-b574-0973b3343ef2",
+      "name": "Log to sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1040,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "529ead59-d270-4919-a012-d595e0a6a654",
+      "name": "Hot lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Re: your message to us",
+        "emailType": "text",
+        "message": "={{ $json.first_reply }}",
+        "options": {}
+      },
+      "id": "21ef6968-262e-4dc0-b745-023dc33f2928",
+      "name": "Reply within minutes",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#leads"
+        },
+        "text": "=🔥 {{ $json.score }}/10 — {{ $json.name }} ({{ $json.company }})\n{{ $json.reason }}\nFirst reply sent. Follow up by phone today.",
+        "otherOptions": {}
+      },
+      "id": "3521e240-acc3-4465-8c72-0e8bfb4b1eb4",
+      "name": "Notify sales",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1820,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "days"
+      },
+      "id": "8e51789c-3a7b-4e76-ad5d-8cab01db0064",
+      "name": "Wait 2 days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        420
+      ],
+      "webhookId": "064ca1bf-c1c4-4724-97f8-37dac4f0bf9c"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "A quick question",
+        "emailType": "text",
+        "message": "=Hi {{ $json.name.split(' ')[0] }},\n\nthanks again for reaching out. To point you to the right thing: what is the one process that costs you the most time every week?\n\nReply in a sentence and I will tell you whether it is worth automating.\n\nAmir",
+        "options": {}
+      },
+      "id": "ab8ef71a-5d82-4649-ad39-0ae8b98a4cb3",
+      "name": "Nurture email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1820,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Website form": {
+      "main": [
+        [
+          {
+            "node": "Normalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise": {
+      "main": [
+        [
+          {
+            "node": "Score with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score with Claude": {
+      "main": [
+        [
+          {
+            "node": "Merge score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge score": {
+      "main": [
+        [
+          {
+            "node": "Upsert in HubSpot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Hot lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hot lead?": {
+      "main": [
+        [
+          {
+            "node": "Reply within minutes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 2 days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply within minutes": {
+      "main": [
+        [
+          {
+            "node": "Notify sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 days": {
+      "main": [
+        [
+          {
+            "node": "Nurture email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    {
+      "name": "ai"
+    },
+    {
+      "name": "sales"
+    },
+    {
+      "name": "crm"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
