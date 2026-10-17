@@ -58,7 +58,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.first().json.content[0].text;\nconst start = raw.indexOf('{'); const end = raw.lastIndexOf('}');\nlet parsed;\ntry { parsed = JSON.parse(raw.slice(start, end + 1)); }\ncatch (e) { parsed = { category: 'other', urgency: 'normal', summary: 'could not classify', suggested_reply: '' }; }\nconst mail = $('New email').first().json;\nreturn [{ json: { ...parsed, messageId: mail.id, threadId: mail.threadId, from: mail.from.value[0].address, subject: mail.subject } }];"
+        "jsCode": "const raw = $input.first().json.content[0].text;\nconst start = raw.indexOf('{'); const end = raw.lastIndexOf('}');\nlet parsed;\ntry { parsed = JSON.parse(raw.slice(start, end + 1)); }\ncatch (e) { parsed = { category: 'other', urgency: 'normal', summary: '', suggested_reply: '' }; }\nconst mail = $('New email').first().json;\nreturn [{ json: { ...parsed, messageId: mail.id, threadId: mail.threadId, from: mail.from.value[0].address, subject: mail.subject } }];"
       },
       "id": "3e8b46ac-d9e2-46ba-86cf-a5cfcddc1106",
       "name": "Parse JSON",
